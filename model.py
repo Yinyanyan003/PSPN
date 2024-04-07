@@ -1,10 +1,81 @@
 import configparser
 import numpy as np
-import tensorflow as tf
+from keras.utils import to_categorical
+import numpy as np
+from sklearn.model_selection import StratifiedKFold
+import os
 import scipy.io as sio
+import keras
+import argparse
 from keras import backend as K
+import tensorflow as tf
+import keras.backend.tensorflow_backend as KTF
 from keras.layers import Input, Flatten, Dense,ReLU, Dropout, Lambda, Layer,Conv2D,MaxPooling2D,UpSampling2D,Add,BatchNormalization,Multiply,Reshape
 from keras.models import Model
+from Utils import *
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument("-c", type = str, help = "configuration file", required = True)
+parser.add_argument("-g", type = str, help = "GPU number to use, set '-1' to use CPU", required = True)
+args = parser.parse_args()
+Path, cfgTrain, cfgModel = ReadConfig(args.c)
+
+# set GPU number or use CPU only
+os.environ["CUDA_VISIBLE_DEVICES"] = args.g
+if args.g != "-1":
+    config = tf.ConfigProto()
+    config.gpu_options.allow_growth=True
+    sess = tf.Session(config=config)
+    KTF.set_session(sess)
+    print("Use GPU #"+args.g)
+else:
+    print("Use CPU only")
+
+# ## 1.2. Analytic parameters
+
+# [train] parameters
+channels   = int(cfgTrain["channels"])
+fold       = int(cfgTrain["fold"])
+context    = int(cfgTrain["context"])
+num_epochs = int(cfgTrain["epoch"])
+batch_size = int(cfgTrain["batch_size"])
+optimizer  = cfgTrain["optimizer"]
+learn_rate = float(cfgTrain["learn_rate"])
+lr_decay   = float(cfgTrain["lr_decay"])
+# trail      = cfgTrain["trail"]
+
+# [model] parameters
+# dense_size            = np.array(str.split(cfgModel["Globaldense"],','),dtype=int)
+num_EEG_channel       = int(cfgModel["num_EEG_channel"])
+num_class             = int(cfgModel["num_class"])
+
+l1                    = float(cfgModel["l1"])
+l2                    = float(cfgModel["l2"])
+dropout               = float(cfgModel["dropout"])
+
+# ## 1.3. Parameter check and enable
+
+# check optimizer（opt）
+if optimizer=="adam":
+    opt = keras.optimizers.Adam(lr=learn_rate,decay=lr_decay)
+elif optimizer=="RMSprop":
+    opt = keras.optimizers.RMSprop(lr=learn_rate,decay=lr_decay)
+elif optimizer=="SGD":
+    opt = keras.optimizers.SGD(lr=learn_rate,decay=lr_decay)
+else:
+    assert False,'Config: check optimizer'
+
+# set l1、l2（regularizer）
+if l1!=0 and l2!=0:
+    regularizer = keras.regularizers.l1_l2(l1=l1, l2=l2)
+elif l1!=0 and l2==0:
+    regularizer = keras.regularizers.l1(l1)
+elif l1==0 and l2!=0:
+    regularizer = keras.regularizers.l2(l2)
+else:
+    regularizer = None
+
 
 def ReadConfig(configfile):
     config = configparser.ConfigParser()
@@ -19,16 +90,14 @@ def ReadConfig(configfile):
 def get_vector_deviation(vector1, vector2):
     return vector1 - vector2
 
+#remove base
 def get_dataset_deviation(trial_data, base_data):
     new_dataset = np.empty([0, 128])
     for i in range(0, 4800):
         base_index = i // 120
-        # print(base_index)
         base_index = 39 if base_index == 40 else base_index
         new_record = get_vector_deviation(trial_data[i], base_data[base_index]).reshape(1, 128)
-        # print(new_record.shape)
         new_dataset = np.vstack([new_dataset, new_record])
-    # print("new shape:",new_dataset.shape)
     return new_dataset
 
 def norm(data):
@@ -52,10 +121,8 @@ def prepare_dataset(FileName, data_dir, norm=True):
     Test_Label = np.array([])
     All_Data = np.empty([0, 62, 5])
 
-    # 读数据
-    label= [1, 0, 2, 2, 0, 1, 2, 0, 1, 1, 0, 2, 0, 1, 2]
+    label= []
     Data_mat = sio.loadmat(data_dir + str(FileName) + '.mat')
-    # print(FileName[file_num])
     for trail in range(9):
         Data = Data_mat['de_LDS' + str(trail+1)]
 
