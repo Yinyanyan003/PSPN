@@ -36,8 +36,6 @@ else:
 
 # [train] parameters
 channels   = int(cfgTrain["channels"])
-fold       = int(cfgTrain["fold"])
-context    = int(cfgTrain["context"])
 num_epochs = int(cfgTrain["epoch"])
 batch_size = int(cfgTrain["batch_size"])
 optimizer  = cfgTrain["optimizer"]
