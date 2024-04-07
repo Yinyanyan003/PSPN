@@ -22,7 +22,7 @@ def create_pairs(x_left,x_right, digit_indices):
             data_left += [x_left[z1]]
             data_right += [x_right[z1]]
             class_label += [[d, d]]
-            # **************构建负样本***************
+            # **************negtive***************
             inc = random.randrange(1, num_class)
             dn = (d + inc) % num_class
             j = random.randint(0, len(digit_indices[dn])-1)
